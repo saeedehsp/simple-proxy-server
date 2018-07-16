@@ -11,9 +11,9 @@ host_name_to_look_up = "";
 T_A = 1  # Ipv4 address
 T_CNAME = 5  # canonical name
 
-address = sys.argv[1]
-port = sys.argv[2]
-query_type = int(sys.argv[3])
+address = sys.argv[2]
+port = sys.argv[3]
+query_type = int(sys.argv[4])
 
 try:
 
