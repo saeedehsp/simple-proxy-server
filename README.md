@@ -1,2 +1,2 @@
 # simple-proxy-server
-http over ump and dns over tcp
+http over udp and dns over tcp

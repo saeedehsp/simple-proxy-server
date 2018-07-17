@@ -1,40 +1,113 @@
+# coding=utf-8
+import datetime
+import threading
+import traceback
+import SocketServer
+import sys
 from socket import *
-import time, sys, signal
+from dnslib import *
 
 
-def handler(signum, frame):
-    raise Exception("")
+class DomainName(str):
+    def __getattr__(self, item):
+        return DomainName(item + '.' + self)
 
 
-signal.signal(signal.SIGALRM, handler)
-# makke cache of packets recieved and sent
-cache = {}
-Port = 12001
-i = 0
-now = time.time()
-# 20 request to prevent port usage cannot use error
-while i < 1000:
-    if time.time() - now >= 300:
-        cache.clear()
-        now = time.time()
-    print "Listening on port 12001"
-    # recieve dns query
-    socket1 = socket(AF_INET, SOCK_DGRAM)
-    socket1.bind(('', Port))
-    # forward to 127.0.1.1 - local dns server
-    message, addr1 = socket1.recvfrom(1024)
-    if message[2:] in cache.keys():
-        socket1.sendto(message[0:2] + cache[message[2:]], addr1)
-        print "Used Cache"
-        continue
-    else:
-        socket1.sendto(message, ("127.0.1.1", 53))
-        print "Query sent"
-        message1, addr = socket1.recvfrom(10000)
-        socket1.sendto(message1, addr1)
-        if len(message1) > len(message):
-            cache[message[2:]] = message1[2:]
-    print  "DNS query replied"
-    i += 1
+IP = '127.0.0.1'
+TTL = 60 * 5
+PORT = 5053
 
-socket1.close()
+
+def request_dns_by_udp(data):
+    # Creates a new udp socket to a real DNS Server, sends data to it and returns it's result
+    udp_socket = socket.socket(AF_INET, SOCK_DGRAM)
+    udp_socket.sendto(data, ("8.8.8.8", 53))
+    message, addr = udp_socket.recvfrom(10000)
+    udp_socket.close()
+    return message
+
+
+def request_http_by_tcp(data):
+    # TODO: Create a new tcp socket to a real HTTP Server, send data to it and return it's result
+    pass
+
+
+class BaseRequestHandler(SocketServer.BaseRequestHandler):
+
+    def get_data(self):
+        raise NotImplementedError
+
+    def send_data(self, data):
+        raise NotImplementedError
+
+    def handle(self):
+        now = datetime.datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S.%f')
+        print "\n\n%s request %s (%s %s):" % (
+            self.__class__.__name__[:3],
+            now,
+            self.client_address[0],
+            self.client_address[1]
+        )
+        try:
+            is_udp = isinstance(self, UDPRequestHandler)
+            data = self.get_data()
+            if is_udp:
+                data = request_http_by_tcp(data)
+            else:
+                data = request_dns_by_udp(data)
+            print len(data), data.encode('hex')  # repr(data).replace('\\x', '')[1:-1]
+            self.send_data(data)
+        except Exception:
+            traceback.print_exc(file=sys.stderr)
+
+
+class TCPRequestHandler(BaseRequestHandler):
+
+    def get_data(self):
+        data = self.request.recv(8192)
+        sz = int(data[:2].encode('hex'), 16)
+        if sz < len(data) - 2:
+            raise Exception("Wrong size of TCP packet")
+        elif sz > len(data) - 2:
+            raise Exception("Too big TCP packet")
+        return data[2:]
+
+    def send_data(self, data):
+        sz = hex(len(data))[2:].zfill(4).decode('hex')
+        return self.request.sendall(sz + data)
+
+
+class UDPRequestHandler(BaseRequestHandler):
+
+    def get_data(self):
+        return self.request[0]
+
+    def send_data(self, data):
+        return self.request[1].sendto(data, self.client_address)
+
+
+if __name__ == '__main__':
+    print "Starting nameserver..."
+
+    servers = [
+        SocketServer.ThreadingUDPServer(('', PORT), UDPRequestHandler),
+        SocketServer.ThreadingTCPServer(('', PORT), TCPRequestHandler),
+    ]
+
+    for s in servers:
+        thread = threading.Thread(target=s.serve_forever)  # that thread will start one more thread for each request
+        thread.daemon = True  # exit the server thread when the main thread terminates
+        thread.start()
+        print "%s server loop running in thread: %s" % (s.RequestHandlerClass.__name__[:3], thread.name)
+
+    try:
+        while 1:
+            time.sleep(1)
+            sys.stderr.flush()
+            sys.stdout.flush()
+
+    except KeyboardInterrupt:
+        pass
+    finally:
+        for s in servers:
+            s.shutdown()

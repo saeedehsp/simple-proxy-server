@@ -1,4 +1,3 @@
-from socket import AF_INET, SOCK_DGRAM  # For setting up the UDP socket.
 import sys
 import socket
 import struct  # For constructing and destructing the DNS packet.
@@ -7,7 +6,7 @@ import struct  # For constructing and destructing the DNS packet.
 
 # Get the host name from the command line.
 
-host_name_to_look_up = "";
+host_name_to_look_up = ""
 T_A = 1  # Ipv4 address
 T_CNAME = 5  # canonical name
 
@@ -16,17 +15,13 @@ port = sys.argv[3]
 query_type = int(sys.argv[4])
 
 try:
-
-    host_name_to_look_up = sys.argv[1];
-
+    host_name_to_look_up = sys.argv[1]
 except IndexError:
-
-    print "No host name specified.";
-
-    sys.exit(0);
+    print "No host name specified."
+    sys.exit(0)
 
 
-# build the DNS packets to be sent with asingle questiom
+# build the DNS packets to be sent with a single question
 def DNSquery(host, type, Class):
     packet = struct.pack("!H", 12049)  # Query Ids (Just 1 for now)
     packet += struct.pack("!H", 0)  # Flags
@@ -40,7 +35,7 @@ def DNSquery(host, type, Class):
     return packet
 
 
-# check and merge 2 bytes to a  single byte
+# check and merge 2 bytes to a single byte
 def chk(chunk):
     if len(chunk) == 2:
         temp = ord(chunk[0])
@@ -50,8 +45,6 @@ def chk(chunk):
         return ord(chunk[0]) * 16777216 + ord(chunk[1]) * 65536 + ord(chunk[2]) * 256 + ord(chunk[3])
 
 
-print_name = ""
-print_right = ""
 l = [None] * 6
 
 
@@ -70,7 +63,7 @@ def decode_A(data):
     i += 12
     # usign rfc1035
     # get name of question
-    while (ord(data[i]) > 0):
+    while ord(data[i]) > 0:
         length = ord(data[i])
         i += 1
         x = []
@@ -134,7 +127,7 @@ def decode_A(data):
                 y.append("".join(x))
                 i += length
                 length = ord(data[i])
-            print  prev, "\t canonical name = ", ".".join(y)
+            print prev, "\t canonical name = ", ".".join(y)
             prev = ".".join(y)
             # i+=a_datalen
             i += 2
@@ -154,17 +147,17 @@ def decode_A(data):
     print prev
     ky = 0
     part = []
-    # authoritaive answers same as non authoritative just addition of query type NS
+    # authoritative answers same as non authoritative just addition of query type NS
     for _ in xrange(l[4] + l[5]):
 
-        while (ord(data[i]) > 0):
+        while ord(data[i]) > 0:
             # print ord(data[i])
             i += 1
         a_type = chk(data[i:i + 2])
         i += 2
         # print a_type
 
-        if a_type == 5 :
+        if a_type == 5:
             # type 5, 6 CNAME , SOA , done from above
             a_class = chk(data[i:i + 2])
             i += 2
@@ -175,7 +168,7 @@ def decode_A(data):
             y = []
             tt = i
             length = ord(data[i])
-            while length > 0 and length < 15:
+            while 0 < length < 15:
                 i += 1
                 x = []
                 for _l in xrange(length):
@@ -183,7 +176,7 @@ def decode_A(data):
                 y.append("".join(x))
                 i += length
                 length = ord(data[i])
-            print  prev, "\t address = ", ".".join(y)
+            print prev, "\t address = ", ".".join(y)
             prev = ".".join(y)
             # i+=a_datalen
             i += 2
@@ -214,15 +207,23 @@ def decode_A(data):
 
 # send packets to server , port taken in arguments
 packet = DNSquery(host_name_to_look_up.split("."), query_type, 1)
-sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-sock.bind(('', 8888))
-sock.settimeout(5)
-sock.sendto(bytes(packet), (address, int(port)))
+sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+sock.connect((address, int(port)))
+sock.sendall(bytes(struct.pack('!H', len(packet)) + packet))
+
+data = ""
 try:
-    data, addr = sock.recvfrom(1024)
+    data = sock.recv(8192)
 except Exception, e:
-    print  "Timeout Occured"
-# print(len(data))
+    print "Timeout Occured"
+
+sz = int(data[:2].encode('hex'), 16)
+if sz < len(data) - 2:
+    raise Exception("Wrong size of TCP packet")
+elif sz > len(data) - 2:
+    raise Exception("Too big TCP packet")
+data = data[2:]
+
 sock.close()
 # print the server and address used
 print "Server:\t\t", address
