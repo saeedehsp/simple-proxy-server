@@ -163,33 +163,8 @@ def decode_A(data):
         a_type = chk(data[i:i + 2])
         i += 2
         # print a_type
-        if a_type == 2:
-            # query type ns
-            a_class = chk(data[i:i + 2])
-            i += 2
-            a_ttl = chk(data[i:i + 4])
-            i += 4
-            a_datalen = chk(data[i:i + 2])
-            i += 2
-            y = []
-            tt = i
-            # print name servers
-            length = ord(data[i])
-            while length > 0 and length < 15:
-                i += 1
-                x = []
-                for _l in xrange(length):
-                    x.append(chr(ord(data[i + _l])))
-                y.append("".join(x))
-                i += length
-                length = ord(data[i])
-            # print nameservers
-            print  print_name, "nameserver = ", ".".join(y)
-            prev = ".".join(y)
-            part.append(prev)
-            # i+=a_datalen
-            i += 2
-        elif a_type == 5 or a_type == 6:
+
+        if a_type == 5 :
             # type 5, 6 CNAME , SOA , done from above
             a_class = chk(data[i:i + 2])
             i += 2
