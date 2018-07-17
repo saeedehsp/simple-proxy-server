@@ -16,14 +16,27 @@ class DomainName(str):
 IP = '127.0.0.1'
 TTL = 60 * 5
 PORT = 5053
+CACHE_DURATION = 10  # Seconds
+
+dns_cache = []
 
 
 def request_dns_by_udp(data):
+    for req in dns_cache:
+        req_data, req_time, req_res = req
+        if (datetime.datetime.now()-req_time).total_seconds() > CACHE_DURATION:
+            dns_cache.remove(req)
+            continue
+        if req_data == data:
+            print "from cache"
+            return req_res
+
     # Creates a new udp socket to a real DNS Server, sends data to it and returns it's result
     udp_socket = socket.socket(AF_INET, SOCK_DGRAM)
     udp_socket.sendto(data, ("8.8.8.8", 53))
     message, addr = udp_socket.recvfrom(10000)
     udp_socket.close()
+    dns_cache.append((data, datetime.datetime.now(), message))
     return message
 
 
